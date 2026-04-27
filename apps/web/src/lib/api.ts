@@ -1,7 +1,9 @@
 import axios from 'axios'
 
+const baseURL = import.meta.env.VITE_API_URL || 'http://187.127.28.229:3333/api'
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -26,13 +28,12 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem('lumia:refreshToken')
       if (refreshToken) {
         try {
-          const { data } = await axios.post('/api/auth/refresh', { refreshToken })
+          const { data } = await axios.post(`${baseURL}/auth/refresh`, { refreshToken })
           localStorage.setItem('lumia:token', data.accessToken)
           localStorage.setItem('lumia:refreshToken', data.refreshToken)
           originalRequest.headers.Authorization = `Bearer ${data.accessToken}`
           return api(originalRequest)
         } catch {
-          // Refresh falhou — limpa tudo e redireciona pro login
           localStorage.removeItem('lumia:token')
           localStorage.removeItem('lumia:refreshToken')
           localStorage.removeItem('lumia:user')
