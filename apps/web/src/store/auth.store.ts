@@ -25,7 +25,7 @@ interface AuthState {
   updateFcmToken: (fcmToken: string) => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   token: null,
   isLoading: false,

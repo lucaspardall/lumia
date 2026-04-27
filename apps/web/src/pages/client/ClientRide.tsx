@@ -8,7 +8,7 @@ import { useRideStore } from '../../store/ride.store'
 import { formatCurrency } from '../../lib/utils'
 
 export default function ClientRide() {
-  const { currentRide, driverLocation, cancelRide, rateRide, listenToRideEvents, clearRide } = useRideStore()
+  const { currentRide, cancelRide, rateRide, listenToRideEvents, clearRide } = useRideStore()
   const navigate = useNavigate()
 
   useEffect(() => {
