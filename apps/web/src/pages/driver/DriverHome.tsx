@@ -9,7 +9,7 @@ import { connectSocket, disconnectSocket, getSocket } from '../../lib/socket'
 
 export default function DriverHome() {
   const { user } = useAuthStore()
-  const { latitude, longitude } = useGeolocation(true)
+  const { lat: latitude, lng: longitude } = useGeolocation(true)
   const [isOnline, setIsOnline] = useState(false)
   const [incomingRide, setIncomingRide] = useState<any>(null)
   const [activeRide, setActiveRide] = useState<any>(null)

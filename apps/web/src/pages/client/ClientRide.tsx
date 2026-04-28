@@ -36,7 +36,7 @@ export default function ClientRide() {
   const handleCancel = async () => {
     setCancelling(true)
     try {
-      await cancelRide(currentRide.id)
+      await cancelRide()
     } finally {
       setCancelling(false)
     }
@@ -44,7 +44,7 @@ export default function ClientRide() {
 
   const handleRate = async (stars: number) => {
     setRating(stars)
-    await rateRide(currentRide.id, stars)
+    await rateRide(stars)
     setTimeout(() => {
       clearRide()
       navigate('/client')

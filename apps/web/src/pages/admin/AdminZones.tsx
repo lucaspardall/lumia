@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import Layout from '../../components/Layout'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { formatCurrency } from '../../lib/utils'
+
 import api from '../../lib/api'
 
 export default function AdminZones() {

@@ -20,7 +20,7 @@ export default function Register() {
     setError('')
     setLoading(true)
     try {
-      await register(name, phone, password, role)
+      await register({ name, phone, password, role })
       navigate('/')
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erro ao cadastrar')

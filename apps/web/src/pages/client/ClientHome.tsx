@@ -9,7 +9,7 @@ import { useAuthStore } from '../../store/auth.store'
 export default function ClientHome() {
   const { zones, fetchZones, getPrice, requestRide, currentRide } = useRideStore()
   const { user } = useAuthStore()
-  const { latitude, longitude } = useGeolocation()
+  const { lat: latitude, lng: longitude } = useGeolocation()
   const navigate = useNavigate()
   const mapRef = useRef<HTMLDivElement>(null)
 
@@ -270,7 +270,3 @@ export default function ClientHome() {
   )
 }
 
-function BottomNav() {
-  const location = (window as any).location
-  return null // Nav is handled by Layout on other pages; on home we show the sheet
-}

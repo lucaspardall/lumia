@@ -29,7 +29,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               'text-white placeholder-dark-200',
               'focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30',
               'transition-all duration-200',
-              icon && 'pl-12',
+              !!icon && 'pl-12',
               error && 'border-danger focus:border-danger focus:ring-danger/30',
               className,
             )}
