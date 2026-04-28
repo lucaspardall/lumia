@@ -1,82 +1,64 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Layout from '../../components/Layout'
-import LoadingSpinner from '../../components/LoadingSpinner'
 import StatusBadge from '../../components/StatusBadge'
+import LoadingSpinner from '../../components/LoadingSpinner'
+import { cn, formatCurrency, formatRelativeDate } from '../../lib/utils'
 import api from '../../lib/api'
-import { formatCurrency, formatDate } from '../../lib/utils'
-
-interface RideItem {
-  id: string
-  status: string
-  price: number
-  paymentMethod: string
-  client: { name: string; phone: string }
-  driver?: { user: { name: string }; licensePlate: string }
-  originZone: { name: string }
-  destZone: { name: string }
-  createdAt: string
-}
 
 export default function AdminRides() {
-  const [rides, setRides] = useState<RideItem[]>([])
-  const [filter, setFilter] = useState('')
+  const [rides, setRides] = useState<any[]>([])
+  const [filter, setFilter] = useState('ALL')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setLoading(true)
-    const url = filter ? `/admin/rides?status=${filter}` : '/admin/rides'
-    api.get(url)
-      .then(({ data }) => { setRides(data.rides); setLoading(false) })
-      .catch(() => setLoading(false))
-  }, [filter])
+    api.get('/admin/rides').then(({ data }) => {
+      setRides(data.rides || data)
+      setLoading(false)
+    })
+  }, [])
+
+  const filtered = filter === 'ALL' ? rides : rides.filter(r => r.status === filter)
 
   return (
-    <Layout title="Corridas">
-      <div className="p-4 max-w-2xl mx-auto">
-        <div className="flex gap-2 mb-4 overflow-x-auto">
-          {[
-            { key: '', label: 'Todas' },
-            { key: 'REQUESTED', label: 'Solicitadas' },
-            { key: 'IN_PROGRESS', label: 'Em andamento' },
-            { key: 'COMPLETED', label: 'Concluídas' },
-            { key: 'CANCELLED', label: 'Canceladas' },
-          ].map((f) => (
+    <Layout title="Corridas" showBack>
+      <div className="px-4 py-4 space-y-4">
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {['ALL', 'REQUESTED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].map((f) => (
             <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
-                filter === f.key ? 'bg-primary text-white' : 'bg-white text-gray-600 border'
-              }`}
+              key={f}
+              onClick={() => setFilter(f)}
+              className={cn(
+                'px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all',
+                filter === f ? 'bg-primary text-white' : 'bg-surface text-dark-200 border border-dark-500',
+              )}
             >
-              {f.label}
+              {f === 'ALL' ? 'Todas' : f === 'REQUESTED' ? 'Solicitadas' : f === 'IN_PROGRESS' ? 'Em andamento' : f === 'COMPLETED' ? 'Concluídas' : 'Canceladas'}
             </button>
           ))}
         </div>
 
-        {loading ? (
-          <LoadingSpinner />
-        ) : rides.length === 0 ? (
-          <p className="text-center text-gray-400 py-8">Nenhuma corrida encontrada</p>
-        ) : (
-          <div className="space-y-3">
-            {rides.map((ride) => (
-              <div key={ride.id} className="bg-white rounded-xl p-4 shadow-sm border">
-                <div className="flex justify-between items-start mb-2">
-                  <StatusBadge status={ride.status} />
-                  <span className="font-display font-bold text-primary">{formatCurrency(ride.price)}</span>
-                </div>
-                <p className="text-sm">
-                  {ride.originZone.name} → {ride.destZone.name}
-                </p>
-                <div className="flex justify-between text-xs text-gray-400 mt-2">
-                  <span>{ride.client.name}</span>
-                  <span>{ride.driver?.user?.name || '—'}</span>
-                </div>
-                <p className="text-xs text-gray-300 mt-1">{formatDate(ride.createdAt)}</p>
+        {loading ? <LoadingSpinner /> : filtered.map((ride) => (
+          <div key={ride.id} className="bg-surface rounded-2xl p-4 border border-dark-600 space-y-3">
+            <div className="flex items-center justify-between">
+              <StatusBadge status={ride.status} />
+              <span className="text-xs text-dark-300">{formatRelativeDate(ride.requestedAt || ride.createdAt)}</span>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-accent rounded-full" />
+                <span className="text-sm text-white">{ride.originZone?.name}</span>
               </div>
-            ))}
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-danger rounded-sm" />
+                <span className="text-sm text-white">{ride.destZone?.name}</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-dark-600 text-sm">
+              <span className="text-dark-200">👤 {ride.client?.name}</span>
+              <span className="font-display font-bold text-white">{formatCurrency(ride.price)}</span>
+            </div>
           </div>
-        )}
+        ))}
       </div>
     </Layout>
   )

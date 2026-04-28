@@ -1,11 +1,31 @@
-export default function LoadingSpinner({ text = 'Carregando...' }: { text?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 gap-3">
-      <svg className="animate-spin h-8 w-8 text-primary" viewBox="0 0 24 24" fill="none">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-      </svg>
-      <p className="text-gray-500 text-sm">{text}</p>
+import { cn } from '../lib/utils'
+
+interface LoadingSpinnerProps {
+  text?: string
+  size?: 'sm' | 'md' | 'lg'
+  fullScreen?: boolean
+}
+
+export default function LoadingSpinner({ text, size = 'md', fullScreen = false }: LoadingSpinnerProps) {
+  const sizes = { sm: 'w-5 h-5', md: 'w-8 h-8', lg: 'w-12 h-12' }
+
+  const spinner = (
+    <div className="flex flex-col items-center gap-3">
+      <div className="relative">
+        <div className={cn('border-2 border-dark-500 rounded-full', sizes[size])} />
+        <div className={cn('absolute inset-0 border-2 border-transparent border-t-primary rounded-full animate-spin', sizes[size])} />
+      </div>
+      {text && <p className="text-sm text-dark-200 animate-pulse">{text}</p>}
     </div>
   )
+
+  if (fullScreen) {
+    return (
+      <div className="fixed inset-0 bg-dark-950 flex items-center justify-center z-50">
+        {spinner}
+      </div>
+    )
+  }
+
+  return <div className="flex justify-center py-12">{spinner}</div>
 }

@@ -2,13 +2,100 @@
 @tailwind components;
 @tailwind utilities;
 
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  background-color: #F8F9FA;
+  background-color: #070B14;
+  color: #E2E8F0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: 'Sora', sans-serif;
+  color: #FFFFFF;
+}
+
+/* Scrollbar moderna */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #0A1628;
+}
+::-webkit-scrollbar-thumb {
+  background: #243754;
+  border-radius: 4px;
+}
+
+/* Bottom sheet base */
+.bottom-sheet {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(15, 29, 50, 0.92);
+  border-top: 1px solid rgba(0, 180, 216, 0.1);
+}
+
+/* Glass effect */
+.glass {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(17, 27, 46, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Glow effects */
+.glow-primary {
+  box-shadow: 0 0 20px rgba(0, 180, 216, 0.3), 0 0 60px rgba(0, 180, 216, 0.1);
+}
+
+.glow-accent {
+  box-shadow: 0 0 20px rgba(0, 230, 118, 0.3), 0 0 60px rgba(0, 230, 118, 0.1);
+}
+
+.glow-danger {
+  box-shadow: 0 0 20px rgba(255, 82, 82, 0.3);
+}
+
+/* Input styling */
+input, select, textarea {
+  color-scheme: dark;
+}
+
+/* Pulse ring animation */
+.pulse-ring {
+  position: relative;
+}
+.pulse-ring::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 2px solid currentColor;
+  opacity: 0;
+  animation: ripple 2s ease-out infinite;
+}
+
+/* Map overlay gradient */
+.map-gradient-top {
+  background: linear-gradient(to bottom, #070B14 0%, transparent 100%);
+}
+.map-gradient-bottom {
+  background: linear-gradient(to top, #070B14 0%, transparent 100%);
+}
+
+/* Skeleton loading */
+.skeleton {
+  background: linear-gradient(90deg, #15253D 25%, #1C2E49 50%, #15253D 75%);
+  background-size: 200% 100%;
+  animation: skeleton 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }

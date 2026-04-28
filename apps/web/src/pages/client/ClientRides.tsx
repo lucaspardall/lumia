@@ -1,72 +1,59 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Layout from '../../components/Layout'
-import LoadingSpinner from '../../components/LoadingSpinner'
 import StatusBadge from '../../components/StatusBadge'
+import LoadingSpinner from '../../components/LoadingSpinner'
 import api from '../../lib/api'
-import { formatCurrency, formatDate } from '../../lib/utils'
-
-interface RideItem {
-  id: string
-  status: string
-  price: number
-  paymentMethod: string
-  originZone: { name: string }
-  destZone: { name: string }
-  driver?: { user: { name: string }; licensePlate: string }
-  requestedAt: string
-  completedAt?: string
-}
+import { formatCurrency, formatRelativeDate } from '../../lib/utils'
 
 export default function ClientRides() {
-  const [rides, setRides] = useState<RideItem[]>([])
+  const [rides, setRides] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     api.get('/client/rides').then(({ data }) => {
-      setRides(data.rides)
+      setRides(data.rides || data)
       setLoading(false)
-    }).catch(() => setLoading(false))
+    })
   }, [])
 
   return (
-    <Layout title="Minhas corridas">
-      <div className="p-4 max-w-lg mx-auto">
+    <Layout title="Minhas corridas" showBack>
+      <div className="px-4 py-4 space-y-3">
         {loading ? (
-          <LoadingSpinner />
+          <LoadingSpinner text="Carregando corridas..." />
         ) : rides.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-400 text-lg">Nenhuma corrida ainda</p>
+          <div className="text-center py-16">
+            <div className="text-5xl mb-4">🚗</div>
+            <p className="text-dark-200">Nenhuma corrida ainda</p>
+            <p className="text-dark-300 text-sm mt-1">Suas corridas aparecerão aqui</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {rides.map((ride) => (
-              <div key={ride.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex justify-between items-start mb-2">
-                  <StatusBadge status={ride.status} />
-                  <span className="font-display font-bold text-primary">
-                    {formatCurrency(ride.price)}
-                  </span>
+          rides.map((ride, i) => (
+            <div
+              key={ride.id}
+              className="bg-surface rounded-2xl p-4 border border-dark-600 hover:border-dark-400 transition-all animate-fade-in"
+              style={{ animationDelay: `${i * 50}ms` }}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <StatusBadge status={ride.status} />
+                <span className="text-xs text-dark-300">{formatRelativeDate(ride.requestedAt || ride.createdAt)}</span>
+              </div>
+              <div className="space-y-1.5 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-accent rounded-full flex-shrink-0" />
+                  <span className="text-sm text-white truncate">{ride.originZone?.name}</span>
                 </div>
-
-                <div className="flex items-start gap-2 mt-3">
-                  <div className="flex flex-col items-center gap-0.5 mt-1">
-                    <div className="w-2 h-2 rounded-full bg-accent" />
-                    <div className="w-0.5 h-4 bg-gray-300" />
-                    <div className="w-2 h-2 rounded-full bg-danger" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{ride.originZone.name}</p>
-                    <p className="text-sm text-gray-400 mt-1">{ride.destZone.name}</p>
-                  </div>
-                </div>
-
-                <div className="mt-3 pt-3 border-t flex justify-between text-xs text-gray-400">
-                  <span>{formatDate(ride.requestedAt)}</span>
-                  {ride.driver && <span>{ride.driver.user.name}</span>}
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-danger rounded-sm flex-shrink-0" />
+                  <span className="text-sm text-white truncate">{ride.destZone?.name}</span>
                 </div>
               </div>
-            ))}
-          </div>
+              <div className="flex items-center justify-between pt-3 border-t border-dark-600">
+                <span className="font-display font-bold text-white">{formatCurrency(ride.price)}</span>
+                <span className="text-xs text-dark-200">{ride.paymentMethod === 'PIX' ? '💠 Pix' : '💵 Dinheiro'}</span>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </Layout>

@@ -1,47 +1,28 @@
 import { useState, useEffect } from 'react'
 import Layout from '../../components/Layout'
 import Button from '../../components/Button'
-import StatusBadge from '../../components/StatusBadge'
+import { cn, formatCurrency } from '../../lib/utils'
 import { useAuthStore } from '../../store/auth.store'
-import { getSocket } from '../../lib/socket'
 import api from '../../lib/api'
-import { formatCurrency } from '../../lib/utils'
-
-interface IncomingRide {
-  id: string
-  price: number
-  originZone: { name: string }
-  destZone: { name: string }
-  client: { name: string; phone: string }
-  pickupAddress?: string
-  paymentMethod: string
-}
+import { useGeolocation } from '../../hooks/useGeolocation'
+import { connectSocket, disconnectSocket, getSocket } from '../../lib/socket'
 
 export default function DriverHome() {
   const { user } = useAuthStore()
+  const { latitude, longitude } = useGeolocation(true)
   const [isOnline, setIsOnline] = useState(false)
-  const [incomingRide, setIncomingRide] = useState<IncomingRide | null>(null)
+  const [incomingRide, setIncomingRide] = useState<any>(null)
   const [activeRide, setActiveRide] = useState<any>(null)
-  const [driverStatus, setDriverStatus] = useState<string>('PENDING')
+  const [loading, setLoading] = useState(false)
 
-  // Carrega perfil do motorista
   useEffect(() => {
-    api.get('/driver/profile').then(({ data }) => {
-      setDriverStatus(data.status)
-      setIsOnline(data.availability === 'ONLINE')
-      if (data.availability === 'ON_TRIP') {
-        // TODO: buscar corrida ativa
-      }
-    }).catch(() => {})
-  }, [])
+    const token = localStorage.getItem('lumia:token')
+    if (!token) return
 
-  // Escuta novos pedidos
-  useEffect(() => {
-    const socket = getSocket()
-    if (!socket) return
+    const socket = connectSocket(token)
 
-    socket.on('ride:new-request', (ride: IncomingRide) => {
-      if (isOnline) setIncomingRide(ride)
+    socket.on('ride:new-request', (ride: any) => {
+      setIncomingRide(ride)
     })
 
     socket.on('ride:cancelled-by-client', () => {
@@ -49,163 +30,180 @@ export default function DriverHome() {
       setActiveRide(null)
     })
 
-    return () => {
-      socket.off('ride:new-request')
-      socket.off('ride:cancelled-by-client')
-    }
-  }, [isOnline])
+    return () => { disconnectSocket() }
+  }, [])
 
-  async function toggleOnline() {
-    const newStatus = isOnline ? 'OFFLINE' : 'ONLINE'
+  useEffect(() => {
+    if (isOnline && latitude && longitude) {
+      const socket = getSocket()
+      socket?.emit('driver:update-location', { lat: latitude, lng: longitude })
+    }
+  }, [latitude, longitude, isOnline])
+
+  const toggleOnline = async () => {
     try {
+      const newStatus = isOnline ? 'OFFLINE' : 'ONLINE'
       await api.post('/driver/availability', { availability: newStatus })
       setIsOnline(!isOnline)
-
       const socket = getSocket()
-      if (socket) {
-        socket.emit(newStatus === 'ONLINE' ? 'driver:online' : 'driver:offline')
+      if (newStatus === 'ONLINE') {
+        socket?.emit('driver:online')
+      } else {
+        socket?.emit('driver:offline')
       }
-    } catch {
-      alert('Erro ao alterar status')
+    } catch (err) {
+      console.error(err)
     }
   }
 
-  async function acceptRide() {
+  const acceptRide = async () => {
     if (!incomingRide) return
+    setLoading(true)
     try {
       const { data } = await api.put(`/rides/${incomingRide.id}/accept`)
       setActiveRide(data)
       setIncomingRide(null)
-    } catch {
-      alert('Corrida não está mais disponível')
-      setIncomingRide(null)
+    } finally {
+      setLoading(false)
     }
   }
 
-  async function advanceRideStatus() {
+  const advanceRide = async (action: string) => {
     if (!activeRide) return
-    const nextAction: Record<string, string> = {
-      ACCEPTED: 'arrive',
-      ARRIVING: 'start',
-      IN_PROGRESS: 'complete',
-    }
-    const action = nextAction[activeRide.status]
-    if (!action) return
-
+    setLoading(true)
     try {
       const { data } = await api.put(`/rides/${activeRide.id}/${action}`)
-      if (data.status === 'COMPLETED') {
+      if (action === 'complete') {
         setActiveRide(null)
-        alert('Corrida finalizada!')
       } else {
         setActiveRide(data)
       }
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Erro')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const actionLabels: Record<string, string> = {
-    ACCEPTED: 'Cheguei no local',
-    ARRIVING: 'Iniciar corrida',
-    IN_PROGRESS: 'Finalizar corrida',
+  const getNextAction = () => {
+    if (!activeRide) return null
+    switch (activeRide.status) {
+      case 'ACCEPTED': return { action: 'arrive', label: 'Cheguei no local', icon: '📍' }
+      case 'ARRIVING': return { action: 'start', label: 'Iniciar corrida', icon: '🚀' }
+      case 'IN_PROGRESS': return { action: 'complete', label: 'Finalizar corrida', icon: '✅' }
+      default: return null
+    }
   }
 
-  if (driverStatus === 'PENDING') {
-    return (
-      <Layout title="Motorista">
-        <div className="p-4 text-center py-12">
-          <div className="text-5xl mb-4">⏳</div>
-          <h2 className="font-display text-xl font-bold text-gray-900">Cadastro em análise</h2>
-          <p className="text-gray-500 mt-2">
-            Seu cadastro está sendo analisado pelo administrador. Você será notificado quando for aprovado.
-          </p>
-        </div>
-      </Layout>
-    )
-  }
-
-  if (driverStatus === 'BLOCKED') {
-    return (
-      <Layout title="Motorista">
-        <div className="p-4 text-center py-12">
-          <div className="text-5xl mb-4">🚫</div>
-          <h2 className="font-display text-xl font-bold text-danger">Conta bloqueada</h2>
-          <p className="text-gray-500 mt-2">
-            Entre em contato com o administrador para mais informações.
-          </p>
-        </div>
-      </Layout>
-    )
-  }
+  const nextAction = getNextAction()
 
   return (
     <Layout>
-      <div className="p-4 max-w-lg mx-auto space-y-4">
-        {/* Status online/offline */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center">
-          <p className="text-gray-500 mb-3">Olá, {user?.name?.split(' ')[0]}</p>
-          <Button
+      <div className="px-4 py-6 space-y-6">
+        {/* Welcome + Toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-dark-200 text-sm">Olá,</p>
+            <h1 className="font-display text-2xl font-bold text-white">{user?.name.split(' ')[0]}</h1>
+          </div>
+
+          {/* Online toggle */}
+          <button
             onClick={toggleOnline}
-            variant={isOnline ? 'danger' : 'primary'}
-            size="lg"
-            className="w-full"
+            className={cn(
+              'relative w-20 h-10 rounded-full transition-all duration-300',
+              isOnline ? 'bg-accent glow-accent' : 'bg-dark-500',
+            )}
           >
-            {isOnline ? '🔴 Ficar Offline' : '🟢 Ficar Online'}
-          </Button>
-          {isOnline && !activeRide && (
-            <p className="text-accent text-sm mt-3 font-medium">Aguardando corridas...</p>
-          )}
+            <div className={cn(
+              'absolute top-1 w-8 h-8 rounded-full bg-white shadow-lg transition-all duration-300',
+              isOnline ? 'left-11' : 'left-1',
+            )} />
+          </button>
         </div>
 
-        {/* Novo pedido */}
+        {/* Status card */}
+        <div className={cn(
+          'rounded-3xl p-6 text-center transition-all duration-500',
+          isOnline ? 'bg-accent/10 border border-accent/20' : 'bg-surface border border-dark-500',
+        )}>
+          <div className={cn(
+            'w-20 h-20 mx-auto rounded-3xl flex items-center justify-center text-4xl mb-4',
+            isOnline ? 'bg-accent/20' : 'bg-dark-500/50',
+          )}>
+            {isOnline ? '🟢' : '🔴'}
+          </div>
+          <h2 className={cn('font-display text-xl font-bold mb-1', isOnline ? 'text-accent' : 'text-dark-200')}>
+            {isOnline ? 'Online' : 'Offline'}
+          </h2>
+          <p className="text-dark-200 text-sm">
+            {isOnline ? 'Aguardando chamados...' : 'Fique online para receber corridas'}
+          </p>
+        </div>
+
+        {/* Incoming ride notification */}
         {incomingRide && (
-          <div className="bg-secondary/10 border-2 border-secondary rounded-2xl p-5 animate-pulse">
-            <h3 className="font-display text-lg font-bold text-secondary mb-3">Nova corrida!</h3>
-            <div className="space-y-2 text-sm">
-              <p><strong>Passageiro:</strong> {incomingRide.client.name}</p>
-              <p><strong>De:</strong> {incomingRide.originZone.name}</p>
-              <p><strong>Para:</strong> {incomingRide.destZone.name}</p>
-              {incomingRide.pickupAddress && (
-                <p><strong>Local:</strong> {incomingRide.pickupAddress}</p>
-              )}
-              <p className="font-display text-2xl font-bold text-primary text-center mt-3">
-                {formatCurrency(incomingRide.price)}
-              </p>
-              <p className="text-center text-gray-500">
-                {incomingRide.paymentMethod === 'PIX' ? 'PIX' : 'Dinheiro'}
-              </p>
+          <div className="bg-primary/10 border-2 border-primary rounded-3xl p-5 animate-bounce-in glow-primary">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center">
+                <span className="text-2xl">🚨</span>
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-white">Nova corrida!</h3>
+                <p className="text-primary text-sm font-bold">{formatCurrency(incomingRide.price)}</p>
+              </div>
             </div>
-            <div className="flex gap-2 mt-4">
-              <Button variant="ghost" className="flex-1" onClick={() => setIncomingRide(null)}>
+
+            <div className="bg-dark-800/50 rounded-2xl p-3 mb-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-accent rounded-full" />
+                <span className="text-sm text-white">{incomingRide.originZone?.name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-danger rounded-sm" />
+                <span className="text-sm text-white">{incomingRide.destZone?.name}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="danger" className="flex-1" onClick={() => setIncomingRide(null)}>
                 Recusar
               </Button>
-              <Button variant="secondary" className="flex-1" onClick={acceptRide}>
+              <Button className="flex-1" loading={loading} onClick={acceptRide}>
                 Aceitar
               </Button>
             </div>
           </div>
         )}
 
-        {/* Corrida ativa */}
+        {/* Active ride */}
         {activeRide && (
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-3">
-            <div className="flex justify-between items-center">
-              <h3 className="font-display font-bold">Corrida em andamento</h3>
-              <StatusBadge status={activeRide.status} />
+          <div className="bg-surface border border-dark-500 rounded-3xl p-5 animate-slide-up space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display font-bold text-white">Corrida ativa</h3>
+              <span className="text-lg font-display font-bold text-primary">{formatCurrency(activeRide.price)}</span>
             </div>
 
-            <div className="space-y-1 text-sm">
-              <p><strong>Passageiro:</strong> {activeRide.client?.name}</p>
-              <p><strong>Rota:</strong> {activeRide.originZone?.name} → {activeRide.destZone?.name}</p>
-              <p className="font-display text-xl font-bold text-primary">
-                {formatCurrency(activeRide.price)}
-              </p>
+            <div className="bg-dark-800 rounded-2xl p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-accent rounded-full" />
+                <span className="text-sm text-white">{activeRide.originZone?.name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-danger rounded-sm" />
+                <span className="text-sm text-white">{activeRide.destZone?.name}</span>
+              </div>
             </div>
 
-            {actionLabels[activeRide.status] && (
-              <Button onClick={advanceRideStatus} className="w-full" size="lg">
-                {actionLabels[activeRide.status]}
+            <div className="bg-dark-800 rounded-2xl p-3 flex items-center gap-3">
+              <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center text-xl">👤</div>
+              <div>
+                <p className="text-white text-sm font-semibold">{activeRide.client?.name}</p>
+                <p className="text-dark-200 text-xs">{activeRide.paymentMethod === 'PIX' ? '💠 Pix' : '💵 Dinheiro'}</p>
+              </div>
+            </div>
+
+            {nextAction && (
+              <Button fullWidth size="lg" loading={loading} onClick={() => advanceRide(nextAction.action)}>
+                {nextAction.icon} {nextAction.label}
               </Button>
             )}
           </div>

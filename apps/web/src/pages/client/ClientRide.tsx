@@ -1,141 +1,183 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Layout from '../../components/Layout'
-import Button from '../../components/Button'
-import StatusBadge from '../../components/StatusBadge'
-import LoadingSpinner from '../../components/LoadingSpinner'
 import { useRideStore } from '../../store/ride.store'
-import { formatCurrency } from '../../lib/utils'
+import Button from '../../components/Button'
+import { cn, formatCurrency } from '../../lib/utils'
+
+const statusSteps = [
+  { key: 'REQUESTED', label: 'Buscando motorista', icon: '🔍' },
+  { key: 'ACCEPTED', label: 'Motorista a caminho', icon: '🚗' },
+  { key: 'ARRIVING', label: 'Motorista chegando', icon: '📍' },
+  { key: 'IN_PROGRESS', label: 'Em viagem', icon: '🛣️' },
+  { key: 'COMPLETED', label: 'Finalizada', icon: '✅' },
+]
 
 export default function ClientRide() {
   const { currentRide, cancelRide, rateRide, listenToRideEvents, clearRide } = useRideStore()
   const navigate = useNavigate()
+  const [rating, setRating] = useState(0)
+  const [cancelling, setCancelling] = useState(false)
 
   useEffect(() => {
-    listenToRideEvents()
+    if (!currentRide) {
+      navigate('/client')
+      return
+    }
+    const unsub = listenToRideEvents()
+    return unsub
   }, [])
 
-  if (!currentRide) {
-    return (
-      <Layout title="Corrida" showBack>
-        <div className="p-4 text-center">
-          <p className="text-gray-500">Nenhuma corrida ativa</p>
-          <Button onClick={() => navigate('/client')} className="mt-4">
-            Solicitar corrida
-          </Button>
-        </div>
-      </Layout>
-    )
+  if (!currentRide) return null
+
+  const currentStepIdx = statusSteps.findIndex(s => s.key === currentRide.status)
+  const isCompleted = currentRide.status === 'COMPLETED'
+  const isCancelled = currentRide.status === 'CANCELLED'
+
+  const handleCancel = async () => {
+    setCancelling(true)
+    try {
+      await cancelRide(currentRide.id)
+    } finally {
+      setCancelling(false)
+    }
   }
 
-  const status = currentRide.status
+  const handleRate = async (stars: number) => {
+    setRating(stars)
+    await rateRide(currentRide.id, stars)
+    setTimeout(() => {
+      clearRide()
+      navigate('/client')
+    }, 1500)
+  }
 
   return (
-    <Layout title="Sua corrida" showNav={false}>
-      <div className="p-4 max-w-lg mx-auto space-y-4">
-        {/* Status principal */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 text-center">
-          <StatusBadge status={status} />
+    <div className="min-h-screen bg-dark-950 flex flex-col">
+      {/* Map area */}
+      <div className="flex-1 relative bg-dark-900 min-h-[40vh]">
+        <div className="absolute inset-0 opacity-20" style={{
+          backgroundImage: `
+            linear-gradient(rgba(0,180,216,0.1) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0,180,216,0.1) 1px, transparent 1px)
+          `,
+          backgroundSize: '50px 50px',
+        }} />
 
-          {status === 'REQUESTED' && (
-            <div className="mt-4">
-              <LoadingSpinner text="Buscando motorista..." />
+        {/* Status overlay */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center animate-bounce-in">
+            <div className="text-5xl mb-3">
+              {statusSteps[currentStepIdx]?.icon || '🚗'}
             </div>
-          )}
-
-          {status === 'ACCEPTED' && currentRide.driver && (
-            <div className="mt-4 space-y-2">
-              <p className="font-display text-lg font-bold">{currentRide.driver.user.name}</p>
-              <p className="text-gray-500">
-                {currentRide.driver.vehicleColor} {currentRide.driver.vehicleMake} {currentRide.driver.vehicleModel}
-              </p>
-              <p className="text-sm font-mono bg-gray-100 inline-block px-3 py-1 rounded-lg">
-                {currentRide.driver.licensePlate}
-              </p>
-              <p className="text-sm text-gray-500 mt-2">
-                Tel: {currentRide.driver.user.phone}
-              </p>
-            </div>
-          )}
-
-          {status === 'ARRIVING' && (
-            <div className="mt-4">
-              <p className="font-display text-xl font-bold text-accent">Motorista chegou!</p>
-              <p className="text-gray-500">Dirija-se ao ponto de encontro</p>
-            </div>
-          )}
-
-          {status === 'IN_PROGRESS' && (
-            <div className="mt-4">
-              <p className="font-display text-xl font-bold text-primary">Em viagem</p>
-              <p className="text-gray-500">Aproveite o trajeto</p>
-            </div>
-          )}
-
-          {status === 'COMPLETED' && (
-            <div className="mt-4 space-y-3">
-              <p className="font-display text-xl font-bold text-accent">Corrida finalizada!</p>
-              <p className="font-display text-3xl font-bold text-primary">
-                {formatCurrency(currentRide.price)}
-              </p>
-
-              {/* Avaliação */}
-              <div className="pt-3 border-t">
-                <p className="text-sm text-gray-600 mb-2">Avalie o motorista</p>
-                <div className="flex justify-center gap-2">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      onClick={() => { rateRide(star); clearRide(); navigate('/client') }}
-                      className="text-3xl hover:scale-110 transition-transform"
-                    >
-                      ⭐
-                    </button>
-                  ))}
-                </div>
+            <p className="text-white font-display font-bold text-lg">
+              {statusSteps[currentStepIdx]?.label}
+            </p>
+            {currentRide.status === 'REQUESTED' && (
+              <div className="flex items-center gap-2 mt-3 justify-center">
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Detalhes da rota */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <div className="flex items-start gap-3">
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-accent" />
-              <div className="w-0.5 h-8 bg-gray-300" />
-              <div className="w-3 h-3 rounded-full bg-danger" />
-            </div>
-            <div className="flex-1 space-y-4">
-              <div>
-                <p className="text-sm text-gray-500">Origem</p>
-                <p className="font-semibold">{currentRide.originZone.name}</p>
-                {currentRide.pickupAddress && (
-                  <p className="text-sm text-gray-500">{currentRide.pickupAddress}</p>
+        {/* Top gradient */}
+        <div className="absolute top-0 left-0 right-0 h-20 map-gradient-top" />
+      </div>
+
+      {/* Bottom panel */}
+      <div className="bottom-sheet rounded-t-3xl -mt-6 relative z-10 px-5 pt-6 pb-8">
+        {/* Progress steps */}
+        {!isCancelled && (
+          <div className="flex items-center justify-between mb-6 px-2">
+            {statusSteps.slice(0, -1).map((step, i) => (
+              <div key={step.key} className="flex items-center flex-1">
+                <div className={cn(
+                  'w-3 h-3 rounded-full transition-all duration-500 flex-shrink-0',
+                  i <= currentStepIdx ? 'bg-primary glow-primary' : 'bg-dark-500',
+                )} />
+                {i < 3 && (
+                  <div className={cn(
+                    'flex-1 h-0.5 mx-1 transition-all duration-500',
+                    i < currentStepIdx ? 'bg-primary' : 'bg-dark-500',
+                  )} />
                 )}
               </div>
-              <div>
-                <p className="text-sm text-gray-500">Destino</p>
-                <p className="font-semibold">{currentRide.destZone.name}</p>
-              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Driver info */}
+        {currentRide.driver && (
+          <div className="bg-dark-800 rounded-2xl p-4 flex items-center gap-4 mb-4 animate-slide-up">
+            <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center text-2xl">
+              🧑‍✈️
+            </div>
+            <div className="flex-1">
+              <p className="text-white font-semibold">{(currentRide.driver as any).user?.name || 'Motorista'}</p>
+              <p className="text-dark-200 text-sm">{(currentRide.driver as any).vehicleModel} • {(currentRide.driver as any).vehicleColor}</p>
+              <p className="text-dark-300 text-xs mt-0.5">{(currentRide.driver as any).licensePlate}</p>
             </div>
           </div>
+        )}
 
-          <div className="mt-4 pt-4 border-t flex justify-between">
-            <span className="text-gray-500">Pagamento</span>
-            <span className="font-semibold">
-              {currentRide.paymentMethod === 'PIX' ? 'PIX' : 'Dinheiro'}
-            </span>
+        {/* Ride details */}
+        <div className="bg-dark-800 rounded-2xl p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-dark-200 mb-1">Valor da corrida</p>
+              <p className="text-xl font-display font-bold text-white">{formatCurrency(currentRide.price)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-dark-200 mb-1">Pagamento</p>
+              <p className="text-sm font-semibold text-white">
+                {currentRide.paymentMethod === 'PIX' ? '💠 Pix' : '💵 Dinheiro'}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Botão cancelar */}
-        {(status === 'REQUESTED' || status === 'ACCEPTED') && (
-          <Button variant="danger" className="w-full" onClick={() => cancelRide('Cancelado pelo passageiro')}>
+        {/* Rating (completed) */}
+        {isCompleted && !rating && (
+          <div className="text-center space-y-4 animate-bounce-in">
+            <p className="font-display font-bold text-white text-lg">Como foi a viagem?</p>
+            <div className="flex justify-center gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => handleRate(star)}
+                  className="text-4xl transition-transform hover:scale-125 active:scale-95"
+                >
+                  {star <= rating ? '⭐' : '☆'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {rating > 0 && (
+          <div className="text-center animate-bounce-in">
+            <p className="text-accent font-display font-bold text-lg">Obrigado pela avaliação!</p>
+          </div>
+        )}
+
+        {/* Cancel */}
+        {isCancelled && (
+          <div className="text-center space-y-4 animate-fade-in">
+            <p className="text-danger font-display font-bold">Corrida cancelada</p>
+            <Button variant="secondary" fullWidth onClick={() => { clearRide(); navigate('/client') }}>
+              Voltar ao início
+            </Button>
+          </div>
+        )}
+
+        {!isCompleted && !isCancelled && currentRide.status !== 'IN_PROGRESS' && (
+          <Button variant="danger" fullWidth loading={cancelling} onClick={handleCancel}>
             Cancelar corrida
           </Button>
         )}
       </div>
-    </Layout>
+    </div>
   )
 }
